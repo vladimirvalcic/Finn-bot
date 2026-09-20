@@ -1,10 +1,10 @@
-import requests
+import os
 import json
-import time
+import requests
 from bs4 import BeautifulSoup
 
-BOT_TOKEN = "8767742995:AAGG0w-kRiTMRLgrIfmyDoujQY9VYGxSJio"
-CHAT_ID = "8996107100"
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
 URL = "https://www.finn.no/recommerce/forsale/search?location=1.20003.20046&location=1.20003.20045&location=1.20007.20110&location=0.20061&sort=PRICE_ASC"
 
@@ -14,101 +14,63 @@ KEYWORDS = [
     "dyson"
 ]
 
-seen = set()
-
 
 def send_message(text):
-    try:
-        r = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            data={
-                "chat_id": CHAT_ID,
-                "text": text
-            },
-            timeout=20
-        )
-
-        if r.status_code == 200:
-            print("✅ Poslata notifikacija")
-        else:
-            print("❌ Telegram greška:", r.text)
-
-    except Exception as e:
-        print("❌ Telegram greška:", e)
+    requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        data={
+            "chat_id": CHAT_ID,
+            "text": text
+        }
+    )
 
 
-print("🔎 Pratim FINN...")
+seen = set()
 
-first_run = True
+if os.path.exists("seen.txt"):
+    with open("seen.txt", "r", encoding="utf-8") as f:
+        seen = set(line.strip() for line in f if line.strip())
 
-while True:
-    try:
-        r = requests.get(
-            URL,
-            headers={
-                "User-Agent": "Mozilla/5.0"
-            },
-            timeout=20
-        )
+r = requests.get(
+    URL,
+    headers={"User-Agent": "Mozilla/5.0"}
+)
 
-        soup = BeautifulSoup(r.text, "html.parser")
+soup = BeautifulSoup(r.text, "html.parser")
 
-        script = soup.find(
-            "script",
-            {"id": "seoStructuredData"}
-        )
+script = soup.find(
+    "script",
+    {"id": "seoStructuredData"}
+)
 
-        if not script:
-            time.sleep(15)
-            continue
+data = json.loads(script.text)
 
-        data = json.loads(script.text)
+items = data["mainEntity"]["itemListElement"]
 
-        items = data["mainEntity"]["itemListElement"]
+for item in items:
 
-        # Pri prvom pokretanju samo zapamti oglase
-        if first_run:
-            for item in items:
-                product = item["item"]
-                seen.add(product.get("url", ""))
+    product = item["item"]
 
-            first_run = False
-            print(f"✅ Zapamćeno {len(seen)} postojećih oglasa")
-            time.sleep(15)
-            continue
+    title = product.get("name", "")
+    link = product.get("url", "")
 
-        for item in items:
+    if not link:
+        continue
 
-            product = item["item"]
+    title_lower = title.lower()
 
-            title = product.get("name", "")
-            link = product.get("url", "")
+    if not any(word in title_lower for word in KEYWORDS):
+        continue
 
-            if not link:
-                continue
+    if link in seen:
+        continue
 
-            title_lower = title.lower()
+    send_message(
+        f"🔔 Novi usisivač!\n\n{title}\n\n{link}"
+    )
 
-            if not any(word in title_lower for word in KEYWORDS):
-                continue
+    seen.add(link)
 
-            if link in seen:
-                continue
-
-            seen.add(link)
-
-            msg = (
-                f"🔔 Novi usisivač pronađen!\n\n"
-                f"{title}\n\n"
-                f"{link}"
-            )
-
-            print(msg)
-
-            send_message(msg)
-
-        time.sleep(15)
-
-    except Exception as e:
-        print("Greška:", e)
-        time.sleep(15)
+with open("seen.txt", "w", encoding="utf-8") as f:
+    for link in seen:
+        f.write(link + "\n")
