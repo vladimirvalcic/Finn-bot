@@ -11,7 +11,13 @@ URL = "https://www.finn.no/recommerce/forsale/search?location=1.20003.20046&loca
 KEYWORDS = [
     "støvsuger",
     "robotstøvsuger",
-    "dyson"
+    "dyson",
+    "roborock",
+    "roomba",
+    "miele",
+    "electrolux",
+    "bosch",
+    "philips",
 ]
 
 
@@ -24,8 +30,7 @@ def send_message(text):
         }
     )
 
-    print("TELEGRAM STATUS:", r.status_code)
-    print("TELEGRAM RESPONSE:", r.text)
+    print("TELEGRAM:", r.status_code)
 
 
 print("BOT STARTED")
@@ -36,18 +41,15 @@ if os.path.exists("seen.txt"):
     with open("seen.txt", "r", encoding="utf-8") as f:
         seen = set(line.strip() for line in f if line.strip())
 
-print("SEEN ITEMS:", len(seen))
-
 r = requests.get(
     URL,
     headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/138.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0"
     },
     timeout=30
 )
 
 print("STATUS:", r.status_code)
-print("PAGE SIZE:", len(r.text))
 
 soup = BeautifulSoup(r.text, "html.parser")
 
@@ -56,50 +58,43 @@ script = soup.find(
     {"id": "seoStructuredData"}
 )
 
-print("SEO SCRIPT FOUND:", script is not None)
-
-if script is None:
-    print("ERROR: seoStructuredData NOT FOUND")
+if not script:
+    print("seoStructuredData not found")
     exit()
 
-try:
-    data = json.loads(script.text)
-    items = data["mainEntity"]["itemListElement"]
+data = json.loads(script.text)
+items = data["mainEntity"]["itemListElement"]
 
-    print("ITEMS FOUND:", len(items))
+print("ITEMS FOUND:", len(items))
 
-    for item in items:
-        product = item["item"]
+for item in items:
 
-        title = product.get("name", "")
-        link = product.get("url", "")
+    product = item.get("item", {})
 
-        print("CHECKING:", title)
+    title = product.get("name", "")
+    description = product.get("description", "")
+    link = product.get("url", "")
 
-        if not link:
-            continue
+    text_to_search = f"{title} {description}".lower()
 
-        title_lower = title.lower()
+    print("CHECKING:", title)
 
-        if not any(word in title_lower for word in KEYWORDS):
-            continue
+    if not any(keyword in text_to_search for keyword in KEYWORDS):
+        continue
 
-        print("KEYWORD MATCH:", title)
+    print("MATCH:", title)
 
-        if link in seen:
-            print("ALREADY SEEN")
-            continue
+    if link in seen:
+        continue
 
-        print("NEW ITEM FOUND:", title)
+    send_message(
+        f"🔔 Novi usisivač!\n\n"
+        f"{title}\n\n"
+        f"{description}\n\n"
+        f"{link}"
+    )
 
-        send_message(
-            f"🔔 Novi usisivač!\n\n{title}\n\n{link}"
-        )
-
-        seen.add(link)
-
-except Exception as e:
-    print("ERROR:", str(e))
+    seen.add(link)
 
 with open("seen.txt", "w", encoding="utf-8") as f:
     for link in seen:
