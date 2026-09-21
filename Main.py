@@ -36,9 +36,7 @@ if os.path.exists("seen.txt"):
 
 r = requests.get(
     URL,
-    headers={
-        "User-Agent": "Mozilla/5.0"
-    },
+    headers={"User-Agent": "Mozilla/5.0"},
     timeout=30
 )
 
@@ -71,7 +69,9 @@ for item in items:
     if not any(keyword in text_to_search for keyword in KEYWORDS):
         continue
 
-    if link in seen:
+    ad_id = link.rstrip("/").split("/")[-1]
+
+    if ad_id in seen:
         continue
 
     send_message(
@@ -80,8 +80,8 @@ for item in items:
         f"{link}"
     )
 
-    seen.add(link)
+    seen.add(ad_id)
 
 with open("seen.txt", "w", encoding="utf-8") as f:
-    for link in seen:
-        f.write(link + "\n")
+    for item in sorted(seen):
+        f.write(item + "\n")
