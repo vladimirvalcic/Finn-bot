@@ -16,7 +16,7 @@ KEYWORDS = [
 
 
 def send_message(text):
-    requests.post(
+    r = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
         data={
             "chat_id": CHAT_ID,
@@ -24,6 +24,11 @@ def send_message(text):
         }
     )
 
+    print("TELEGRAM STATUS:", r.status_code)
+    print("TELEGRAM RESPONSE:", r.text)
+
+
+print("BOT STARTED")
 
 seen = set()
 
@@ -31,10 +36,18 @@ if os.path.exists("seen.txt"):
     with open("seen.txt", "r", encoding="utf-8") as f:
         seen = set(line.strip() for line in f if line.strip())
 
+print("SEEN ITEMS:", len(seen))
+
 r = requests.get(
     URL,
-    headers={"User-Agent": "Mozilla/5.0"}
+    headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/138.0 Safari/537.36"
+    },
+    timeout=30
 )
+
+print("STATUS:", r.status_code)
+print("PAGE SIZE:", len(r.text))
 
 soup = BeautifulSoup(r.text, "html.parser")
 
@@ -43,34 +56,53 @@ script = soup.find(
     {"id": "seoStructuredData"}
 )
 
-data = json.loads(script.text)
+print("SEO SCRIPT FOUND:", script is not None)
 
-items = data["mainEntity"]["itemListElement"]
+if script is None:
+    print("ERROR: seoStructuredData NOT FOUND")
+    exit()
 
-for item in items:
+try:
+    data = json.loads(script.text)
+    items = data["mainEntity"]["itemListElement"]
 
-    product = item["item"]
+    print("ITEMS FOUND:", len(items))
 
-    title = product.get("name", "")
-    link = product.get("url", "")
+    for item in items:
+        product = item["item"]
 
-    if not link:
-        continue
+        title = product.get("name", "")
+        link = product.get("url", "")
 
-    title_lower = title.lower()
+        print("CHECKING:", title)
 
-    if not any(word in title_lower for word in KEYWORDS):
-        continue
+        if not link:
+            continue
 
-    if link in seen:
-        continue
+        title_lower = title.lower()
 
-    send_message(
-        f"🔔 Novi usisivač!\n\n{title}\n\n{link}"
-    )
+        if not any(word in title_lower for word in KEYWORDS):
+            continue
 
-    seen.add(link)
+        print("KEYWORD MATCH:", title)
+
+        if link in seen:
+            print("ALREADY SEEN")
+            continue
+
+        print("NEW ITEM FOUND:", title)
+
+        send_message(
+            f"🔔 Novi usisivač!\n\n{title}\n\n{link}"
+        )
+
+        seen.add(link)
+
+except Exception as e:
+    print("ERROR:", str(e))
 
 with open("seen.txt", "w", encoding="utf-8") as f:
     for link in seen:
         f.write(link + "\n")
+
+print("BOT FINISHED")
